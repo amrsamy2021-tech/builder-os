@@ -121,23 +121,27 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
   },
 
   appendJobOutput: (jobId, line) => {
-    set((state) => ({
-      jobs: state.jobs.map((j) =>
-        j.id === jobId
-          ? { ...j, liveOutput: `${j.liveOutput ?? ""}${line}\n` }
-          : j,
-      ),
-    }));
+    set((state) => {
+      const job = state.jobs.find((j) => j.id === jobId);
+      if (!job) return state;
+      const liveOutput = `${job.liveOutput ?? ""}${line}\n`;
+      if (liveOutput === job.liveOutput) return state;
+      return {
+        jobs: state.jobs.map((j) => (j.id === jobId ? { ...j, liveOutput } : j)),
+      };
+    });
   },
 
   markJobStreamDone: (jobId) => {
-    set((state) => ({
-      jobs: state.jobs.map((j) =>
-        j.id === jobId && j.status === "running"
-          ? { ...j, output: j.liveOutput ?? j.output }
-          : j,
-      ),
-    }));
+    set((state) => {
+      const job = state.jobs.find((j) => j.id === jobId);
+      if (!job || job.status !== "running") return state;
+      return {
+        jobs: state.jobs.map((j) =>
+          j.id === jobId ? { ...j, output: j.liveOutput ?? j.output } : j,
+        ),
+      };
+    });
   },
 
   cancelJob: async (jobId) => {

@@ -32,7 +32,8 @@ async function generateWithCursor(
   onStream?: (text: string) => void,
 ): Promise<string> {
   const prompt = buildAgentPrompt(agentType, productBrain, deliverableType);
-  const unsub = useAgentJobsStore.subscribe((state) => {
+  const unsub = useAgentJobsStore.subscribe((state, prevState) => {
+    if (state.jobs === prevState.jobs) return;
     const running = state.jobs.find(
       (j) => j.status === "running" && j.label === taskLabel && j.projectId === productBrain.id,
     );

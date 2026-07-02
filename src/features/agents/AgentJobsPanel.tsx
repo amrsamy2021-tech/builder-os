@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useAgentJobsStore } from "@/stores/useAgentJobsStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,11 @@ interface AgentJobsPanelProps {
 }
 
 export function AgentJobsPanel({ projectId }: AgentJobsPanelProps) {
-  const jobs = useAgentJobsStore((s) => s.getProjectJobs(projectId));
+  const allJobs = useAgentJobsStore((s) => s.jobs);
+  const jobs = useMemo(
+    () => allJobs.filter((j) => j.projectId === projectId),
+    [allJobs, projectId],
+  );
   const clearFinished = useAgentJobsStore((s) => s.clearFinished);
   const cancelJob = useAgentJobsStore((s) => s.cancelJob);
   const activeJobId = useAgentJobsStore((s) => s.activeJobId);
