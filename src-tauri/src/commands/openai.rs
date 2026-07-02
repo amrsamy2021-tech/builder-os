@@ -1,20 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-use crate::secrets::{delete_secret, require_secret, save_secret};
+use crate::secrets::{self, require_secret};
 
 #[tauri::command]
-pub fn save_secret_cmd(key: String, value: String) -> Result<(), String> {
-    save_secret(&key, &value)
+pub fn save_secret(key: String, value: String) -> Result<(), String> {
+    secrets::save_secret(&key, &value)
 }
 
 #[tauri::command]
-pub fn get_secret_cmd(key: String) -> Result<Option<String>, String> {
-    crate::secrets::get_secret(&key)
+pub fn get_secret(key: String) -> Result<Option<String>, String> {
+    secrets::get_secret(&key)
 }
 
 #[tauri::command]
-pub fn delete_secret_cmd(key: String) -> Result<(), String> {
-    delete_secret(&key)
+pub fn delete_secret(key: String) -> Result<(), String> {
+    secrets::delete_secret(&key)
 }
 
 #[derive(Serialize, Deserialize)]
