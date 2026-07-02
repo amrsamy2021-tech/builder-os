@@ -65,6 +65,28 @@ pub fn scaffold_project(
         ),
     ];
 
+    // Default MCP config for project
+    let mcp_path = root.join(".cursor").join("mcp.json");
+    if !mcp_path.exists() {
+        let mcp_config = serde_json::json!({
+            "mcpServers": {
+                "notion": {
+                    "url": "https://mcp.notion.com/mcp",
+                    "headers": {}
+                },
+                "figma": {
+                    "type": "http",
+                    "url": "https://mcp.figma.com/mcp"
+                }
+            }
+        });
+        fs::write(
+            &mcp_path,
+            serde_json::to_string_pretty(&mcp_config).unwrap_or_default(),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
     for (rel_path, content) in files {
         let path = root.join(rel_path);
         if !path.exists() {

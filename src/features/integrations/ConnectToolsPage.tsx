@@ -1,36 +1,75 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, PlugZap, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIntegrationStore } from "@/stores/useIntegrationStore";
-import { TOOL_CARDS } from "@/types/integrations";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { TOOL_CARDS, MCP_CAPABLE_TOOLS } from "@/types/integrations";
 import { toast } from "sonner";
 
 export function ConnectToolsPage() {
-  const { integrations, fetchIntegrations, connect, disconnect, test, loading } =
-    useIntegrationStore();
+  const {
+    integrations,
+    mcpServers,
+    fetchIntegrations,
+    fetchMcpServers,
+    connect,
+    connectViaMcp,
+    disconnect,
+    test,
+    testMcp,
+    loading,
+    getMcpServerForTool,
+  } = useIntegrationStore();
+  const { getActiveProject } = useProjectStore();
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
+  const [connectionMode, setConnectionMode] = useState<Record<string, "mcp" | "api_key">>({});
+
+  const activeProject = getActiveProject();
 
   useEffect(() => {
     fetchIntegrations();
-  }, [fetchIntegrations]);
+    fetchMcpServers();
+  }, [fetchIntegrations, fetchMcpServers]);
 
   const getStatus = (tool: string) =>
     integrations.find((i) => i.tool === tool)?.status ?? "disconnected";
 
-  const handleConnect = async (tool: string) => {
+  const getConnectionMode = (tool: string) => {
+    const integration = integrations.find((i) => i.tool === tool);
+    if (integration?.config?.mode === "mcp") return "mcp";
+    if (integration?.config?.mode === "api_key") return "api_key";
+    return connectionMode[tool] ?? (MCP_CAPABLE_TOOLS.includes(tool as typeof MCP_CAPABLE_TOOLS[number]) ? "mcp" : "api_key");
+  };
+
+  const handleConnectMcp = async (tool: string) => {
+    const server = getMcpServerForTool(tool);
+    if (!server) {
+      toast.error(`No MCP server found for ${tool}. Add it in Cursor MCP settings first.`);
+      return;
+    }
+    try {
+      await connectViaMcp(tool, server.name, activeProject?.folderPath);
+      toast.success(`${tool} connected via MCP (${server.name})`);
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleConnectApiKey = async (tool: string) => {
     const secret = secrets[tool];
-    if (tool !== "cursor" && tool !== "filesystem" && tool !== "shell" && !secret) {
+    if (!secret) {
       toast.error("Please enter credentials");
       return;
     }
     try {
       await connect(tool, { connected: "true" }, secret);
-      toast.success(`${tool} connected`);
+      toast.success(`${tool} connected via API key`);
     } catch (e) {
       toast.error(String(e));
     }
@@ -48,18 +87,82 @@ export function ConnectToolsPage() {
     }
   };
 
+  const handleTestMcpServer = async (serverName: string) => {
+    setTesting(serverName);
+    try {
+      const result = await testMcp(serverName);
+      toast.success(result);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setTesting(null);
+    }
+  };
+
   return (
     <div className="p-8">
       <h1 className="mb-2 text-3xl font-bold">Connect Tools</h1>
-      <p className="mb-8 text-muted-foreground">
-        Connect your development tools to Builder OS
+      <p className="mb-4 text-muted-foreground">
+        Connect via MCP (recommended) — uses your Cursor MCP servers — or fall back to API keys.
       </p>
+
+      {mcpServers.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PlugZap className="h-4 w-4" />
+              Available MCP Servers
+            </CardTitle>
+            <CardDescription>
+              Detected from ~/.cursor/mcp.json and Builder OS templates
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {mcpServers.map((server) => (
+                <div
+                  key={server.name}
+                  className="flex items-center justify-between rounded-lg border p-3"
+                >
+                  <div>
+                    <p className="font-medium">{server.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {server.transport} · {server.source}
+                      {server.mappedTool && ` · maps to ${server.mappedTool}`}
+                    </p>
+                    {server.url && (
+                      <p className="truncate text-xs text-muted-foreground">{server.url}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{server.transport}</Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleTestMcpServer(server.name)}
+                      disabled={testing === server.name}
+                    >
+                      {testing === server.name ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        "Test"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {TOOL_CARDS.map((tool) => {
           const status = getStatus(tool.tool);
           const isConnected = status === "connected";
-          const needsToken = !["cursor", "filesystem", "shell"].includes(tool.tool);
+          const mode = getConnectionMode(tool.tool);
+          const mcpServer = tool.supportsMcp ? getMcpServerForTool(tool.tool) : null;
+          const isLocal = ["cursor", "filesystem", "shell"].includes(tool.tool);
 
           return (
             <Card key={tool.tool}>
@@ -78,39 +181,124 @@ export function ConnectToolsPage() {
                   </Badge>
                 </div>
                 <CardDescription>{tool.description}</CardDescription>
-                <p className="text-xs text-muted-foreground">
-                  via {tool.connectionMethod}
-                </p>
+                <p className="text-xs text-muted-foreground">{tool.connectionMethod}</p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {needsToken && !isConnected && (
-                  <div>
-                    <Label htmlFor={`${tool.tool}-token`}>
-                      {tool.connectionMethod}
-                    </Label>
-                    <Input
-                      id={`${tool.tool}-token`}
-                      type="password"
-                      value={secrets[tool.tool] ?? ""}
-                      onChange={(e) =>
-                        setSecrets((s) => ({ ...s, [tool.tool]: e.target.value }))
-                      }
-                      placeholder={`Enter ${tool.name} token`}
-                      className="mt-1"
-                    />
-                  </div>
+                {!isConnected && tool.supportsMcp && (
+                  <Tabs
+                    value={mode}
+                    onValueChange={(v) =>
+                      setConnectionMode((s) => ({ ...s, [tool.tool]: v as "mcp" | "api_key" }))
+                    }
+                  >
+                    <TabsList className="w-full">
+                      <TabsTrigger value="mcp" className="flex-1 gap-1">
+                        <PlugZap className="h-3 w-3" />
+                        MCP
+                      </TabsTrigger>
+                      <TabsTrigger value="api_key" className="flex-1 gap-1">
+                        <Key className="h-3 w-3" />
+                        API Key
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="mcp" className="mt-3 space-y-2">
+                      {mcpServer ? (
+                        <>
+                          <div className="rounded-md border bg-muted/50 p-3 text-sm">
+                            <p className="font-medium">{mcpServer.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {mcpServer.transport}
+                              {mcpServer.url && ` · ${mcpServer.url}`}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleConnectMcp(tool.tool)}
+                            disabled={loading}
+                          >
+                            Connect via MCP
+                          </Button>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No MCP server found. Add {tool.name} to ~/.cursor/mcp.json in Cursor
+                          settings, then refresh.
+                        </p>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="api_key" className="mt-3 space-y-2">
+                      <div>
+                        <Label htmlFor={`${tool.tool}-token`}>API Token</Label>
+                        <Input
+                          id={`${tool.tool}-token`}
+                          type="password"
+                          value={secrets[tool.tool] ?? ""}
+                          onChange={(e) =>
+                            setSecrets((s) => ({ ...s, [tool.tool]: e.target.value }))
+                          }
+                          placeholder={`Enter ${tool.name} token`}
+                          className="mt-1"
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleConnectApiKey(tool.tool)}
+                        disabled={loading}
+                      >
+                        Connect via API Key
+                      </Button>
+                    </TabsContent>
+                  </Tabs>
                 )}
-                <div className="flex gap-2">
-                  {!isConnected ? (
+
+                {!isConnected && !tool.supportsMcp && !isLocal && (
+                  <>
+                    <div>
+                      <Label htmlFor={`${tool.tool}-token`}>API Key</Label>
+                      <Input
+                        id={`${tool.tool}-token`}
+                        type="password"
+                        value={secrets[tool.tool] ?? ""}
+                        onChange={(e) =>
+                          setSecrets((s) => ({ ...s, [tool.tool]: e.target.value }))
+                        }
+                        placeholder={`Enter ${tool.name} key`}
+                        className="mt-1"
+                      />
+                    </div>
                     <Button
                       size="sm"
-                      onClick={() => handleConnect(tool.tool)}
+                      onClick={() => handleConnectApiKey(tool.tool)}
                       disabled={loading}
                     >
                       Connect
                     </Button>
-                  ) : (
-                    <>
+                  </>
+                )}
+
+                {!isConnected && isLocal && (
+                  <Button
+                    size="sm"
+                    onClick={() => connect(tool.tool, { connected: "true" })}
+                    disabled={loading}
+                  >
+                    Connect
+                  </Button>
+                )}
+
+                {isConnected && (
+                  <div className="space-y-2">
+                    {integrations.find((i) => i.tool === tool.tool)?.config?.mode === "mcp" && (
+                      <Badge variant="secondary" className="gap-1">
+                        <PlugZap className="h-3 w-3" />
+                        MCP: {integrations.find((i) => i.tool === tool.tool)?.config?.mcpServer}
+                      </Badge>
+                    )}
+                    <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -122,16 +310,12 @@ export function ConnectToolsPage() {
                         ) : null}
                         Test
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => disconnect(tool.tool)}
-                      >
+                      <Button size="sm" variant="destructive" onClick={() => disconnect(tool.tool)}>
                         Disconnect
                       </Button>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ProductBrain, Project } from "@/types/product-brain";
 import type { WorkflowStageState } from "@/types/workflow";
-import type { IntegrationConfig } from "@/types/integrations";
+import type { IntegrationConfig, McpServerInfo } from "@/types/integrations";
 
 export interface Deliverable {
   id: string;
@@ -159,7 +159,16 @@ export const commands = {
   generateFigmaPrompts: (productBrain: ProductBrain) =>
     invoke<string>("generate_figma_prompts", { productBrain }),
 
-  // Shell
-  runShellCommand: (command: string, cwd?: string) =>
-    invoke<string>("run_shell_command", { command, cwd }),
+  // MCP
+  listMcpServers: () => invoke<McpServerInfo[]>("list_mcp_servers"),
+  readProjectMcpConfig: (folderPath: string) =>
+    invoke<Record<string, unknown>>("read_project_mcp_config", { folderPath }),
+  connectToolViaMcp: (tool: string, mcpServerName: string, folderPath?: string) =>
+    invoke<McpServerInfo>("connect_tool_via_mcp", {
+      tool,
+      mcpServerName,
+      folderPath,
+    }),
+  testMcpConnection: (mcpServerName: string) =>
+    invoke<string>("test_mcp_connection", { mcpServerName }),
 };

@@ -54,6 +54,10 @@ pub fn run() {
             commands::figma::test_figma,
             commands::figma::fetch_figma_file,
             commands::figma::generate_figma_prompts,
+            commands::mcp::list_mcp_servers,
+            commands::mcp::read_project_mcp_config,
+            commands::mcp::connect_tool_via_mcp,
+            commands::mcp::test_mcp_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
