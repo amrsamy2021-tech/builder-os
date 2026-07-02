@@ -1,0 +1,22 @@
+---
+description: Builder OS product context
+alwaysApply: true
+---
+
+# Builder OS
+
+Builder OS is a macOS AI Product Development Operating System built with Tauri v2, React, TypeScript, Tailwind, shadcn/ui, and SQLite.
+
+## Architecture
+
+- Tauri Rust layer owns secrets, DB, shell commands, external API calls
+- React renderer never holds API keys
+- Product Brain is the single source of truth
+- All external actions require user approval
+
+## Conventions
+
+- Feature-based folder structure under `src/features/`
+- Zustand for state management
+- Tauri commands via `src/lib/tauri-commands.ts`
+- shadcn/ui components in `src/components/ui/`
