@@ -37,8 +37,11 @@ interface SidebarProps {
 export function Sidebar({ projectId }: SidebarProps) {
   return (
     <aside className="flex h-full w-56 flex-col border-r bg-card">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <Brain className="h-5 w-5" />
+      <div
+        data-tauri-drag-region
+        className="titlebar-drag flex h-[3.25rem] shrink-0 items-center gap-2 border-b px-4 pt-7"
+      >
+        <Brain className="h-5 w-5 shrink-0" />
         <span className="font-semibold">Builder OS</span>
       </div>
 
