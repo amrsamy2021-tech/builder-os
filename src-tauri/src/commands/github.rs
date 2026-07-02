@@ -1,9 +1,9 @@
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 
+use crate::secrets::require_secret;
+
 fn get_github_token() -> Result<String, String> {
-    let entry = Entry::new("builder-os", "builder-os-github").map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+    require_secret("builder-os-github", "GitHub token")
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -1,35 +1,20 @@
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 
+use crate::secrets::{delete_secret, require_secret, save_secret};
+
 #[tauri::command]
-pub fn save_secret(key: String, value: String) -> Result<(), String> {
-    let entry = Entry::new("builder-os", &key).map_err(|e| e.to_string())?;
-    entry.set_password(&value).map_err(|e| e.to_string())
+pub fn save_secret_cmd(key: String, value: String) -> Result<(), String> {
+    save_secret(&key, &value)
 }
 
 #[tauri::command]
-pub fn get_secret(key: String) -> Result<Option<String>, String> {
-    let entry = Entry::new("builder-os", &key).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(val) => Ok(Some(val)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+pub fn get_secret_cmd(key: String) -> Result<Option<String>, String> {
+    crate::secrets::get_secret(&key)
 }
 
 #[tauri::command]
-pub fn delete_secret(key: String) -> Result<(), String> {
-    let entry = Entry::new("builder-os", &key).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-fn get_api_key(service: &str) -> Result<String, String> {
-    let entry = Entry::new("builder-os", service).map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+pub fn delete_secret_cmd(key: String) -> Result<(), String> {
+    delete_secret(&key)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -56,7 +41,7 @@ struct OpenAIChoice {
 
 #[tauri::command]
 pub async fn test_openai(model: Option<String>) -> Result<String, String> {
-    let api_key = get_api_key("builder-os-openai")?;
+    let api_key = require_secret("builder-os-openai", "OpenAI API key")?;
     let model = model.unwrap_or_else(|| "gpt-4o".to_string());
 
     let client = reqwest::Client::new();
@@ -98,7 +83,7 @@ pub async fn generate_with_openai(
     deliverable_type: String,
     model: Option<String>,
 ) -> Result<String, String> {
-    let api_key = get_api_key("builder-os-openai")?;
+    let api_key = require_secret("builder-os-openai", "OpenAI API key")?;
     let model = model.unwrap_or_else(|| "gpt-4o".to_string());
 
     let context = product_brain.to_string();

@@ -9,25 +9,57 @@ import { toast } from "sonner";
 export function SettingsPage() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [model, setModel] = useState("gpt-4o");
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const saveOpenAI = async () => {
-    if (!openaiKey) return;
+    if (!openaiKey.trim()) {
+      toast.error("Please enter your OpenAI API key");
+      return;
+    }
+    setSaving(true);
     try {
-      await commands.saveSecret("builder-os-openai", openaiKey);
-      await commands.saveIntegration("openai", { model, connected: "true" });
-      toast.success("OpenAI settings saved");
+      await commands.saveSecret("builder-os-openai", openaiKey.trim());
+      await commands.saveIntegration("openai", { model, connected: "true", mode: "api_key" });
+      toast.success("OpenAI key saved");
       setOpenaiKey("");
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveAndTestOpenAI = async () => {
+    if (!openaiKey.trim()) {
+      toast.error("Please enter your OpenAI API key first");
+      return;
+    }
+    setSaving(true);
+    setTesting(true);
+    try {
+      await commands.saveSecret("builder-os-openai", openaiKey.trim());
+      await commands.saveIntegration("openai", { model, connected: "true", mode: "api_key" });
+      const result = await commands.testOpenAI(model);
+      toast.success(result);
+      setOpenaiKey("");
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setSaving(false);
+      setTesting(false);
     }
   };
 
   const testOpenAI = async () => {
+    setTesting(true);
     try {
       const result = await commands.testOpenAI(model);
       toast.success(result);
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -40,7 +72,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">OpenAI</CardTitle>
           <CardDescription>
-            API key is stored securely in macOS Keychain
+            Your API key is stored locally on this Mac (Keychain or secure app storage)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -65,10 +97,15 @@ export function SettingsPage() {
               className="mt-1"
             />
           </div>
-          <div className="flex gap-2">
-            <Button onClick={saveOpenAI}>Save</Button>
-            <Button variant="outline" onClick={testOpenAI}>
-              Test Connection
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={saveOpenAI} disabled={saving}>
+              {saving ? "Saving..." : "Save Key"}
+            </Button>
+            <Button variant="outline" onClick={saveAndTestOpenAI} disabled={saving || testing}>
+              {testing ? "Testing..." : "Save & Test"}
+            </Button>
+            <Button variant="secondary" onClick={testOpenAI} disabled={testing}>
+              Test Saved Key
             </Button>
           </div>
         </CardContent>

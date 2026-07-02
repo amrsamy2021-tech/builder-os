@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import { WindowDragRegion } from "@/components/WindowDragRegion";
 
 const NAV_ITEMS = [
   { to: "/welcome", label: "Home", icon: Home, end: true },
@@ -37,15 +38,12 @@ interface SidebarProps {
 export function Sidebar({ projectId }: SidebarProps) {
   return (
     <aside className="flex h-full w-56 flex-col border-r bg-card">
-      <div
-        data-tauri-drag-region
-        className="titlebar-drag flex h-[3.25rem] shrink-0 items-center gap-2 border-b px-4 pt-7"
-      >
+      <WindowDragRegion className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Brain className="h-5 w-5 shrink-0" />
         <span className="font-semibold">Builder OS</span>
-      </div>
+      </WindowDragRegion>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-1 overflow-auto p-3">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

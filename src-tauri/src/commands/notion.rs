@@ -1,9 +1,9 @@
-use keyring::Entry;
 use std::collections::HashMap;
 
+use crate::secrets::require_secret;
+
 fn get_notion_token() -> Result<String, String> {
-    let entry = Entry::new("builder-os", "builder-os-notion").map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+    require_secret("builder-os-notion", "Notion token")
 }
 
 #[tauri::command]

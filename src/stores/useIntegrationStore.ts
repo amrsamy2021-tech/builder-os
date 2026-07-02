@@ -52,6 +52,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
       await commands.saveIntegration(tool, { ...config, mode: "api_key", connected: "true" });
       await get().fetchIntegrations();
       await commands.logActivity(null, "integration_connected", { tool, mode: "api_key" });
+      set({ loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
       throw e;
@@ -75,6 +76,7 @@ export const useIntegrationStore = create<IntegrationState>((set, get) => ({
         mode: "mcp",
         mcpServer: mcpServerName,
       });
+      set({ loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
       throw e;

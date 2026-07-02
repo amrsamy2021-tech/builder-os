@@ -1,5 +1,6 @@
 mod db;
 mod commands;
+mod secrets;
 
 use db::DbState;
 
@@ -38,9 +39,9 @@ pub fn run() {
             commands::shell::open_in_cursor,
             commands::shell::run_shell_command,
             commands::shell::write_cursor_files,
-            commands::openai::save_secret,
-            commands::openai::get_secret,
-            commands::openai::delete_secret,
+            commands::openai::save_secret_cmd,
+            commands::openai::get_secret_cmd,
+            commands::openai::delete_secret_cmd,
             commands::openai::test_openai,
             commands::openai::generate_with_openai,
             commands::github::test_github,
