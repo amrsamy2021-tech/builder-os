@@ -46,8 +46,8 @@ export const TOOL_CARDS: ToolCardInfo[] = [
   {
     tool: "cursor",
     name: "Cursor",
-    description: "Open projects and generate implementation tasks",
-    connectionMethod: "Local App + MCP",
+    description: "Background agent runs and Send to Dev from Builder OS",
+    connectionMethod: "API Key + CLI",
     supportsMcp: true,
   },
   {

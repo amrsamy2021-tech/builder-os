@@ -5,4 +5,5 @@ pub mod openai;
 pub mod github;
 pub mod notion;
 pub mod figma;
+pub mod cursor;
 pub mod mcp;

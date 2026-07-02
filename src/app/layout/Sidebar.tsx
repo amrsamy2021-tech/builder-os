@@ -9,6 +9,7 @@ import {
   Settings,
   FolderOpen,
   Home,
+  Layout,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -26,6 +27,7 @@ const PROJECT_NAV = [
   { segment: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { segment: "workflow", label: "Product Cycle", icon: GitBranch },
   { segment: "product-brain", label: "Product Brain", icon: Brain },
+  { segment: "screens", label: "Screens", icon: Layout },
   { segment: "deliverables", label: "Deliverables", icon: FileText },
   { segment: "integrations", label: "Integrations", icon: Plug },
   { segment: "qa", label: "QA & Release", icon: Activity },

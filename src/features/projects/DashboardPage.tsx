@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useWorkflowStore } from "@/stores/useWorkflowStore";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
-import { useIntegrationStore } from "@/stores/useIntegrationStore";
 import {
   computeNextAction,
   getOverallProgress,
@@ -16,6 +15,9 @@ import {
 } from "@/features/workflow/next-action-engine";
 import { commands } from "@/lib/tauri-commands";
 import { toast } from "sonner";
+import { NextActionPanel } from "@/features/workflow/NextActionPanel";
+import { AgentJobsPanel } from "@/features/agents/AgentJobsPanel";
+import { getScreenQAStats, getScreenQACases } from "@/lib/screen-hub";
 import type { Deliverable } from "@/lib/tauri-commands";
 import type { WorkflowStageState } from "@/types/workflow";
 
@@ -27,7 +29,6 @@ export function DashboardPage() {
   const { projects, productBrains, loadProductBrain, setActiveProject } = useProjectStore();
   const { stages, fetchStages } = useWorkflowStore();
   const { deliverables, fetchDeliverables } = useDeliverablesStore();
-  const { integrations, fetchIntegrations } = useIntegrationStore();
 
   const project = projects.find((p) => p.id === id);
   const brain = id ? productBrains[id] : null;
@@ -44,12 +45,20 @@ export function DashboardPage() {
     loadProductBrain(id);
     fetchStages(id);
     fetchDeliverables(id);
-    fetchIntegrations();
-  }, [id, setActiveProject, loadProductBrain, fetchStages, fetchDeliverables, fetchIntegrations]);
+  }, [id, setActiveProject, loadProductBrain, fetchStages, fetchDeliverables]);
 
   const currentStage = getCurrentStage(projectStages);
   const overallProgress = getOverallProgress(projectStages);
-  const connectedCount = integrations.filter((i) => i.status === "connected").length;
+  const screenCount = brain?.screens.length ?? 0;
+  const qaStats = brain
+    ? brain.screens.reduce(
+        (acc, screen) => {
+          const stats = getScreenQAStats(getScreenQACases(brain, screen.id));
+          return { pass: acc.pass + stats.pass, total: acc.total + stats.total };
+        },
+        { pass: 0, total: 0 },
+      )
+    : { pass: 0, total: 0 };
 
   const openInCursor = async () => {
     if (!project) return;
@@ -114,9 +123,9 @@ export function DashboardPage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {nextAction.description}
                 </p>
-                <Button asChild size="sm" className="mt-3">
-                  <Link to={`/projects/${id}/deliverables`}>Take Action</Link>
-                </Button>
+                <div className="mt-3">
+                  <NextActionPanel projectId={id!} nextAction={nextAction} />
+                </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">All stages complete!</p>
@@ -126,17 +135,20 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Connected Tools</CardTitle>
+            <CardTitle className="text-base">Screens & QA</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{connectedCount}/7</p>
-            <p className="text-sm text-muted-foreground">tools connected</p>
+            <p className="text-2xl font-bold">
+              {screenCount} screens · {qaStats.pass}/{qaStats.total} tests passing
+            </p>
             <Button asChild variant="link" className="mt-2 h-auto p-0">
-              <Link to="/connect-tools">Manage tools →</Link>
+              <Link to={`/projects/${id}/screens`}>Open Screens →</Link>
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      {id && <AgentJobsPanel projectId={id} />}
 
       <div className="mt-8 flex gap-3">
         <Button onClick={openInCursor}>

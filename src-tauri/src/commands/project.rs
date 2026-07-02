@@ -52,8 +52,22 @@ pub struct Deliverable {
     pub content: String,
     pub status: String,
     pub version: i32,
+    pub notion_page_id: Option<String>,
+    pub notion_page_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveDeliverableInput {
+    pub id: String,
+    pub project_id: String,
+    pub r#type: String,
+    pub title: String,
+    pub content: String,
+    pub status: String,
+    pub version: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -294,6 +308,25 @@ pub fn update_workflow_stage(
     Ok(())
 }
 
+fn row_to_deliverable(row: &rusqlite::Row<'_>) -> rusqlite::Result<Deliverable> {
+    Ok(Deliverable {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        r#type: row.get(2)?,
+        title: row.get(3)?,
+        content: row.get(4)?,
+        status: row.get(5)?,
+        version: row.get(6)?,
+        notion_page_id: row.get(7)?,
+        notion_page_url: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+    })
+}
+
+const DELIVERABLE_SELECT: &str =
+    "SELECT id, project_id, type, title, content, status, version, notion_page_id, notion_page_url, created_at, updated_at FROM deliverables";
+
 #[tauri::command]
 pub fn get_deliverables(
     state: State<'_, DbState>,
@@ -301,23 +334,11 @@ pub fn get_deliverables(
 ) -> Result<Vec<Deliverable>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, project_id, type, title, content, status, version, created_at, updated_at FROM deliverables WHERE project_id = ?1 ORDER BY updated_at DESC")
+        .prepare(&format!("{} WHERE project_id = ?1 ORDER BY updated_at DESC", DELIVERABLE_SELECT))
         .map_err(|e| e.to_string())?;
 
     let items = stmt
-        .query_map(params![project_id], |row| {
-            Ok(Deliverable {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                r#type: row.get(2)?,
-                title: row.get(3)?,
-                content: row.get(4)?,
-                status: row.get(5)?,
-                version: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-            })
-        })
+        .query_map(params![project_id], row_to_deliverable)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
@@ -328,15 +349,25 @@ pub fn get_deliverables(
 #[tauri::command]
 pub fn save_deliverable(
     state: State<'_, DbState>,
-    deliverable: Deliverable,
+    deliverable: SaveDeliverableInput,
 ) -> Result<Deliverable, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
 
+    let existing_id: Option<String> = conn
+        .query_row(
+            "SELECT id FROM deliverables WHERE project_id = ?1 AND type = ?2 ORDER BY updated_at DESC LIMIT 1",
+            params![deliverable.project_id, deliverable.r#type],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let id = existing_id.unwrap_or_else(|| deliverable.id.clone());
+
     conn.execute(
-        "INSERT INTO deliverables (id, project_id, type, title, content, status, version, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8) ON CONFLICT(id) DO UPDATE SET content = ?5, status = ?6, version = version + 1, updated_at = ?8",
+        "INSERT INTO deliverables (id, project_id, type, title, content, status, version, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8) ON CONFLICT(id) DO UPDATE SET title = ?4, content = ?5, status = ?6, version = version + 1, updated_at = ?8",
         params![
-            deliverable.id,
+            id,
             deliverable.project_id,
             deliverable.r#type,
             deliverable.title,
@@ -348,11 +379,36 @@ pub fn save_deliverable(
     )
     .map_err(|e| e.to_string())?;
 
-    Ok(Deliverable {
-        created_at: now.clone(),
-        updated_at: now,
-        ..deliverable
-    })
+    conn.query_row(
+        &format!("{} WHERE id = ?1", DELIVERABLE_SELECT),
+        params![id],
+        row_to_deliverable,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn mark_deliverable_synced(
+    state: State<'_, DbState>,
+    id: String,
+    notion_page_id: Option<String>,
+    notion_page_url: Option<String>,
+) -> Result<Deliverable, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE deliverables SET status = 'synced', notion_page_id = ?1, notion_page_url = ?2, updated_at = ?3 WHERE id = ?4",
+        params![notion_page_id, notion_page_url, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        &format!("{} WHERE id = ?1", DELIVERABLE_SELECT),
+        params![id],
+        row_to_deliverable,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -367,21 +423,9 @@ pub fn approve_deliverable(state: State<'_, DbState>, id: String) -> Result<Deli
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
-        "SELECT id, project_id, type, title, content, status, version, created_at, updated_at FROM deliverables WHERE id = ?1",
+        &format!("{} WHERE id = ?1", DELIVERABLE_SELECT),
         params![id],
-        |row| {
-            Ok(Deliverable {
-                id: row.get(0)?,
-                project_id: row.get(1)?,
-                r#type: row.get(2)?,
-                title: row.get(3)?,
-                content: row.get(4)?,
-                status: row.get(5)?,
-                version: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-            })
-        },
+        row_to_deliverable,
     )
     .map_err(|e| e.to_string())
 }

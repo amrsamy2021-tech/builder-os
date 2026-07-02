@@ -1,29 +1,33 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { CheckCircle } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+import { CheckCircle, Layout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useScreensStore } from "@/stores/useScreensStore";
 import { commands } from "@/lib/tauri-commands";
 import { toast } from "sonner";
 
 export function QAPage() {
   const { id } = useParams<{ id: string }>();
-  const { productBrains, loadProductBrain, updateProductBrain } = useProjectStore();
+  const { projects, productBrains, loadProductBrain, updateProductBrain } = useProjectStore();
   const { deliverables, fetchDeliverables, saveDeliverable } = useDeliverablesStore();
+  const { importFromDeliverables } = useScreensStore();
   const { generate } = useAgentStore();
   const [releaseReady, setReleaseReady] = useState(false);
 
   const brain = id ? productBrains[id] : null;
+  const project = projects.find((p) => p.id === id);
   const qaDeliverable = id
     ? deliverables[id]?.find((d) => d.type === "qa_test_cases")
     : null;
   const releaseDeliverable = id
     ? deliverables[id]?.find((d) => d.type === "release_checklist")
     : null;
+  const projectDeliverables = id ? deliverables[id] ?? [] : [];
 
   useEffect(() => {
     if (id) {
@@ -35,7 +39,14 @@ export function QAPage() {
   const generateQA = async () => {
     if (!id || !brain) return;
     try {
-      const content = await generate("qa", brain, "qa_test_cases");
+      const content = await generate(
+        "qa",
+        brain,
+        "qa_test_cases",
+        "QA Test Cases",
+        undefined,
+        project?.folderPath,
+      );
       await saveDeliverable({
         id: crypto.randomUUID(),
         projectId: id,
@@ -45,7 +56,13 @@ export function QAPage() {
         status: "draft",
         version: 1,
       });
-      toast.success("QA test cases generated");
+      await fetchDeliverables(id);
+      const all = useDeliverablesStore.getState().deliverables[id] ?? projectDeliverables;
+      const importResult = await importFromDeliverables(id, brain, all);
+      useProjectStore.setState((s) => ({
+        productBrains: { ...s.productBrains, [id]: importResult.brain },
+      }));
+      toast.success("QA test cases generated and imported to Screens");
     } catch (e) {
       toast.error(String(e));
     }
@@ -54,7 +71,14 @@ export function QAPage() {
   const generateRelease = async () => {
     if (!id || !brain) return;
     try {
-      const content = await generate("release", brain, "release_checklist");
+      const content = await generate(
+        "release",
+        brain,
+        "release_checklist",
+        "Release Checklist",
+        undefined,
+        project?.folderPath,
+      );
       await saveDeliverable({
         id: crypto.randomUUID(),
         projectId: id,
@@ -81,9 +105,23 @@ export function QAPage() {
   return (
     <div className="p-8">
       <h1 className="mb-2 text-3xl font-bold">QA & Release</h1>
-      <p className="mb-8 text-muted-foreground">
+      <p className="mb-4 text-muted-foreground">
         Test cases, release checklist, and readiness
       </p>
+
+      {id && (
+        <Card className="mb-8 border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Layout className="h-4 w-4" />
+              Run and track test cases per screen in Screens — pass, fail, and re-test
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/projects/${id}/screens`}>Open Screens</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

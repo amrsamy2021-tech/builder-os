@@ -2,7 +2,7 @@ import type { WorkflowStageState, NextAction } from "@/types/workflow";
 import type { ProductBrain } from "@/types/product-brain";
 import type { Deliverable } from "@/lib/tauri-commands";
 
-const DELIVERABLE_TYPE_MAP: Record<string, string> = {
+export const DELIVERABLE_TYPE_MAP: Record<string, string> = {
   "Product Brief": "product_brief",
   Personas: "personas",
   "Jobs to be Done": "jtbd",
@@ -25,37 +25,97 @@ const DELIVERABLE_TYPE_MAP: Record<string, string> = {
   "Release Checklist": "release_checklist",
 };
 
-function hasInput(productBrain: ProductBrain, input: string): boolean {
+function hasInput(
+  productBrain: ProductBrain,
+  deliverables: Deliverable[],
+  input: string,
+): boolean {
   const lower = input.toLowerCase();
   if (lower.includes("idea") && productBrain.idea.length > 0) return true;
   if (lower.includes("target user") && productBrain.targetUsers.length > 0)
     return true;
   if (lower.includes("business goal") && productBrain.businessGoal)
     return true;
-  if (lower.includes("persona") && productBrain.targetUsers.length > 0)
-    return true;
-  if (lower.includes("research") && productBrain.goals.length > 0) return true;
-  if (lower.includes("prd") && productBrain.requirements.length > 0) return true;
-  if (lower.includes("user stor") && productBrain.userStories.length > 0)
-    return true;
-  if (lower.includes("ux flow") && productBrain.uxFlows.length > 0) return true;
-  if (lower.includes("screen spec") && productBrain.screens.length > 0)
-    return true;
-  if (lower.includes("architecture") && productBrain.architecture.overview)
-    return true;
-  if (lower.includes("cursor task") && productBrain.tasks.length > 0)
-    return true;
-  if (lower.includes("qa") && productBrain.qaCases.length > 0) return true;
+  if (lower.includes("persona")) {
+    return (
+      productBrain.targetUsers.length > 0 ||
+      isDeliverableDone(deliverables, "Personas")
+    );
+  }
+  if (lower.includes("research")) {
+    return (
+      isDeliverableDone(deliverables, "Research Summary") ||
+      productBrain.goals.length > 0
+    );
+  }
+  if (lower.includes("prd")) {
+    return (
+      isDeliverableDone(deliverables, "PRD") ||
+      productBrain.requirements.length > 0
+    );
+  }
+  if (lower.includes("user stor")) {
+    return (
+      isDeliverableDone(deliverables, "User Stories") ||
+      productBrain.userStories.length > 0
+    );
+  }
+  if (lower.includes("ux flow")) {
+    return (
+      isDeliverableDone(deliverables, "UX Flows") ||
+      productBrain.uxFlows.length > 0
+    );
+  }
+  if (lower.includes("screen spec")) {
+    return (
+      isDeliverableDone(deliverables, "Screen Specs") ||
+      productBrain.screens.length > 0
+    );
+  }
+  if (lower.includes("screen list")) {
+    return (
+      isDeliverableDone(deliverables, "Screen List") ||
+      productBrain.screens.length > 0
+    );
+  }
+  if (lower.includes("architecture")) {
+    return (
+      isDeliverableDone(deliverables, "Architecture Plan") ||
+      Boolean(productBrain.architecture.overview)
+    );
+  }
+  if (lower.includes("cursor task")) {
+    return (
+      isDeliverableDone(deliverables, "Cursor Tasks") ||
+      productBrain.tasks.length > 0
+    );
+  }
+  if (lower.includes("qa")) {
+    return (
+      isDeliverableDone(deliverables, "QA Test Cases") ||
+      productBrain.qaCases.length > 0
+    );
+  }
   return false;
 }
 
-function getDeliverableStatus(
+function isDeliverableDone(
+  deliverables: Deliverable[],
+  name: string,
+): boolean {
+  const status = getDeliverableStatus(deliverables, name);
+  return status === "approved" || status === "synced";
+}
+
+export function getDeliverableStatus(
   deliverables: Deliverable[],
   name: string,
 ): "missing" | "draft" | "approved" | "synced" {
   const type = DELIVERABLE_TYPE_MAP[name];
   if (!type) return "missing";
-  const d = deliverables.find((del) => del.type === type);
+  const d = deliverables
+    .filter((del) => del.type === type)
+    .sort((a, b) => b.version - a.version)[0];
   if (!d) return "missing";
   return d.status;
 }
@@ -73,7 +133,7 @@ export function computeNextAction(
   if (!currentStage) return null;
 
   for (const input of currentStage.requiredInputs) {
-    if (!hasInput(productBrain, input)) {
+    if (!hasInput(productBrain, deliverables, input)) {
       return {
         id: `input-${input}`,
         title: `Provide ${input}`,
@@ -91,9 +151,9 @@ export function computeNextAction(
       return {
         id: `generate-${type}`,
         title: `Generate ${deliverable}`,
-        description: `Use AI to generate ${deliverable} for the ${currentStage.name} stage`,
+        description: `Use Cursor AI to generate ${deliverable} for the ${currentStage.name} stage`,
         type: "ai_generate",
-        targetTool: "openai",
+        targetTool: "cursor",
         requiresApproval: false,
         deliverableType: type,
       };
@@ -108,16 +168,8 @@ export function computeNextAction(
         deliverableType: DELIVERABLE_TYPE_MAP[deliverable],
       };
     }
-    if (status === "approved") {
-      return {
-        id: `sync-${deliverable}`,
-        title: `Sync ${deliverable}`,
-        description: `Sync approved ${deliverable} to connected tools`,
-        type: "sync_tool",
-        targetTool: "notion",
-        requiresApproval: true,
-        deliverableType: DELIVERABLE_TYPE_MAP[deliverable],
-      };
+    if (status === "approved" || status === "synced") {
+      continue;
     }
   }
 

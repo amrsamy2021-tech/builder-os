@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS deliverables (
   content TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft',
   version INTEGER NOT NULL DEFAULT 1,
+  notion_page_id TEXT,
+  notion_page_url TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

@@ -8,6 +8,7 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
 import { computeNextAction, getCurrentStage } from "@/features/workflow/next-action-engine";
 import type { Deliverable } from "@/lib/tauri-commands";
+import { NextActionPanel } from "@/features/workflow/NextActionPanel";
 import type { StageStatus, WorkflowStageState } from "@/types/workflow";
 
 const EMPTY_STAGES: WorkflowStageState[] = [];
@@ -59,6 +60,9 @@ export function WorkflowPage() {
           <CardContent>
             <p className="font-medium">{nextAction.title}</p>
             <p className="text-sm text-muted-foreground">{nextAction.description}</p>
+            <div className="mt-3">
+              <NextActionPanel projectId={id!} nextAction={nextAction} />
+            </div>
           </CardContent>
         </Card>
       )}

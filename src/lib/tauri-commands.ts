@@ -11,6 +11,8 @@ export interface Deliverable {
   content: string;
   status: "draft" | "approved" | "synced";
   version: number;
+  notionPageId?: string;
+  notionPageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +78,16 @@ export const commands = {
     invoke<Deliverable>("save_deliverable", { deliverable }),
   approveDeliverable: (id: string) =>
     invoke<Deliverable>("approve_deliverable", { id }),
+  markDeliverableSynced: (
+    id: string,
+    notionPageId?: string,
+    notionPageUrl?: string,
+  ) =>
+    invoke<Deliverable>("mark_deliverable_synced", {
+      id,
+      notionPageId,
+      notionPageUrl,
+    }),
 
   // Activity log
   logActivity: (projectId: string | null, action: string, details?: Record<string, unknown>) =>
@@ -104,6 +116,7 @@ export const commands = {
     invoke<void>("save_secret", { key, value }),
   getSecret: (key: string) => invoke<string | null>("get_secret", { key }),
   deleteSecret: (key: string) => invoke<void>("delete_secret", { key }),
+  hasSecret: (key: string) => invoke<boolean>("has_secret", { key }),
 
   // OpenAI
   testOpenAI: (model?: string) => invoke<string>("test_openai", { model }),
@@ -122,6 +135,20 @@ export const commands = {
 
   // Cursor
   detectCursor: () => invoke<boolean>("detect_cursor"),
+  detectCursorCli: () => invoke<boolean>("detect_cursor_cli"),
+  testCursorAgent: () => invoke<string>("test_cursor_agent"),
+  runCursorAgent: (input: {
+    folderPath: string;
+    prompt: string;
+    mode?: string;
+  }) =>
+    invoke<string>("run_cursor_agent", {
+      input: {
+        folder_path: input.folderPath,
+        prompt: input.prompt,
+        mode: input.mode,
+      },
+    }),
   openInCursor: (folderPath: string) =>
     invoke<void>("open_in_cursor", { folderPath }),
   writeCursorFiles: (folderPath: string, productBrain: ProductBrain) =>
@@ -147,10 +174,29 @@ export const commands = {
       parentPageId,
     }),
   syncDeliverableToNotion: (
-    pageId: string,
+    projectPageId: string,
     title: string,
     content: string,
-  ) => invoke<string>("sync_deliverable_to_notion", { pageId, title, content }),
+    deliverablePageId?: string,
+  ) =>
+    invoke<Record<string, string>>("sync_deliverable_to_notion", {
+      projectPageId,
+      title,
+      content,
+      deliverablePageId,
+    }),
+  syncScreenToNotion: (
+    projectPageId: string,
+    screenName: string,
+    content: string,
+    screenPageId?: string,
+  ) =>
+    invoke<Record<string, string>>("sync_screen_to_notion", {
+      projectPageId,
+      screenName,
+      content,
+      screenPageId,
+    }),
 
   // Figma
   testFigma: () => invoke<string>("test_figma"),

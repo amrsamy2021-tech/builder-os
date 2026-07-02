@@ -17,6 +17,11 @@ pub fn delete_secret(key: String) -> Result<(), String> {
     secrets::delete_secret(&key)
 }
 
+#[tauri::command]
+pub fn has_secret(key: String) -> Result<bool, String> {
+    secrets::has_secret(&key)
+}
+
 #[derive(Serialize, Deserialize)]
 struct OpenAIMessage {
     role: String,

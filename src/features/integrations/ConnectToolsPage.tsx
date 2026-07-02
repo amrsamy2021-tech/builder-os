@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIntegrationStore } from "@/stores/useIntegrationStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { TOOL_CARDS, MCP_CAPABLE_TOOLS } from "@/types/integrations";
+import { NotionSyncSetup } from "@/features/integrations/NotionSyncSetup";
+import { runWithLoading } from "@/stores/useLoadingStore";
 import { toast } from "sonner";
 
 export function ConnectToolsPage() {
@@ -23,10 +25,15 @@ export function ConnectToolsPage() {
     test,
     testMcp,
     loading,
+    notionSyncReady,
+    checkNotionSyncReady,
+    saveNotionSyncToken,
     getMcpServerForTool,
   } = useIntegrationStore();
   const { getActiveProject } = useProjectStore();
   const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [notionSyncToken, setNotionSyncToken] = useState("");
+  const [savingNotionSync, setSavingNotionSync] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [connectionMode, setConnectionMode] = useState<Record<string, "mcp" | "api_key">>({});
 
@@ -35,7 +42,8 @@ export function ConnectToolsPage() {
   useEffect(() => {
     fetchIntegrations();
     fetchMcpServers();
-  }, [fetchIntegrations, fetchMcpServers]);
+    checkNotionSyncReady();
+  }, [fetchIntegrations, fetchMcpServers, checkNotionSyncReady]);
 
   const getStatus = (tool: string) =>
     integrations.find((i) => i.tool === tool)?.status ?? "disconnected";
@@ -54,10 +62,24 @@ export function ConnectToolsPage() {
       return;
     }
     try {
-      await connectViaMcp(tool, server.name, activeProject?.folderPath);
+      const syncToken = tool === "notion" ? notionSyncToken : undefined;
+      await connectViaMcp(tool, server.name, activeProject?.folderPath, syncToken);
       toast.success(`${tool} connected via MCP (${server.name})`);
     } catch (e) {
       toast.error(String(e));
+    }
+  };
+
+  const handleSaveNotionSync = async () => {
+    setSavingNotionSync(true);
+    try {
+      await saveNotionSyncToken(notionSyncToken);
+      toast.success("Notion sync token saved — you can create pages from Builder OS");
+      setNotionSyncToken("");
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setSavingNotionSync(false);
     }
   };
 
@@ -78,7 +100,7 @@ export function ConnectToolsPage() {
   const handleTest = async (tool: string) => {
     setTesting(tool);
     try {
-      const result = await test(tool);
+      const result = await runWithLoading(`Testing ${tool}...`, () => test(tool));
       toast.success(result);
     } catch (e) {
       toast.error(String(e));
@@ -90,7 +112,9 @@ export function ConnectToolsPage() {
   const handleTestMcpServer = async (serverName: string) => {
     setTesting(serverName);
     try {
-      const result = await testMcp(serverName);
+      const result = await runWithLoading(`Testing ${serverName}...`, () =>
+        testMcp(serverName),
+      );
       toast.success(result);
     } catch (e) {
       toast.error(String(e));
@@ -220,6 +244,18 @@ export function ConnectToolsPage() {
                           >
                             Connect via MCP
                           </Button>
+                          {tool.tool === "notion" && (
+                            <NotionSyncSetup
+                              compact
+                              syncToken={notionSyncToken}
+                              onSyncTokenChange={setNotionSyncToken}
+                              onSave={handleSaveNotionSync}
+                              onTest={() => handleTest("notion")}
+                              saving={savingNotionSync}
+                              testing={testing === "notion"}
+                              syncReady={notionSyncReady}
+                            />
+                          )}
                         </>
                       ) : (
                         <p className="text-sm text-muted-foreground">
@@ -297,6 +333,18 @@ export function ConnectToolsPage() {
                         <PlugZap className="h-3 w-3" />
                         MCP: {integrations.find((i) => i.tool === tool.tool)?.config?.mcpServer}
                       </Badge>
+                    )}
+                    {tool.tool === "notion" && (
+                      <NotionSyncSetup
+                        compact
+                        syncToken={notionSyncToken}
+                        onSyncTokenChange={setNotionSyncToken}
+                        onSave={handleSaveNotionSync}
+                        onTest={() => handleTest("notion")}
+                        saving={savingNotionSync}
+                        testing={testing === "notion"}
+                        syncReady={notionSyncReady}
+                      />
                     )}
                     <div className="flex gap-2">
                       <Button

@@ -65,12 +65,30 @@ export interface UXFlow {
   edgeCases: string[];
 }
 
+export type ScreenDesignStatus = "none" | "draft" | "approved";
+export type ScreenDevStatus = "not_started" | "in_progress" | "done";
+export type QATestStatus = "pending" | "pass" | "fail" | "manual";
+export type PreferredAgentMode = "local" | "cloud" | "auto";
+
+export interface QARunRecord {
+  at: string;
+  status: "pass" | "fail";
+  note?: string;
+}
+
 export interface ScreenSpec {
   id: string;
   name: string;
   purpose: string;
   components: string[];
   states: string[];
+  notionPageId?: string;
+  notionPageUrl?: string;
+  figmaFileKey?: string;
+  figmaNodeId?: string;
+  figmaUrl?: string;
+  designStatus?: ScreenDesignStatus;
+  devStatus?: ScreenDevStatus;
 }
 
 export interface ArchitectureSpec {
@@ -106,7 +124,11 @@ export interface QATestCase {
   title: string;
   steps: string[];
   expectedResult: string;
-  status: "pending" | "pass" | "fail" | "manual";
+  status: QATestStatus;
+  screenId?: string;
+  lastRunAt?: string;
+  lastRunBy?: "manual" | "automated";
+  runHistory?: QARunRecord[];
 }
 
 export interface ReleaseNote {
@@ -143,6 +165,9 @@ export interface ProductBrain {
   githubRepo?: string;
   figmaFileUrl?: string;
   notionPageId?: string;
+  notionPageUrl?: string;
+  notionParentPageId?: string;
+  preferredAgentMode?: PreferredAgentMode;
   createdAt: string;
   updatedAt: string;
 }

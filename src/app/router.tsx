@@ -7,6 +7,8 @@ import { DashboardPage } from "@/features/projects/DashboardPage";
 import { WorkflowPage } from "@/features/workflow/WorkflowPage";
 import { ProductBrainPage } from "@/features/product-brain/ProductBrainPage";
 import { DeliverablesPage } from "@/features/deliverables/DeliverablesPage";
+import { ScreensPage } from "@/features/screens/ScreensPage";
+import { ScreenDetailPage } from "@/features/screens/ScreenDetailPage";
 import { QAPage } from "@/features/deliverables/QAPage";
 import { ConnectToolsPage } from "@/features/integrations/ConnectToolsPage";
 import { ProjectIntegrationsPage } from "@/features/integrations/ProjectIntegrationsPage";
@@ -26,6 +28,8 @@ export const router = createBrowserRouter([
       { path: "projects/:id/workflow", element: <WorkflowPage /> },
       { path: "projects/:id/product-brain", element: <ProductBrainPage /> },
       { path: "projects/:id/deliverables", element: <DeliverablesPage /> },
+      { path: "projects/:id/screens", element: <ScreensPage /> },
+      { path: "projects/:id/screens/:screenId", element: <ScreenDetailPage /> },
       { path: "projects/:id/integrations", element: <ProjectIntegrationsPage /> },
       { path: "projects/:id/qa", element: <QAPage /> },
       { path: "connect-tools", element: <ConnectToolsPage /> },

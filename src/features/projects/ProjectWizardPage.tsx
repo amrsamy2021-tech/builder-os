@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { commands } from "@/lib/tauri-commands";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { isValidNotionPageId, normalizeNotionPageId } from "@/lib/notion-sync";
 import type { Platform } from "@/types/product-brain";
 
 const STEPS = [
@@ -98,7 +99,9 @@ export function ProjectWizardPage() {
         ],
         githubRepo: githubRepo || undefined,
         figmaFileUrl: figmaUrl || undefined,
-        notionPageId: notionDest || undefined,
+        notionParentPageId: notionDest.trim() && isValidNotionPageId(notionDest)
+          ? normalizeNotionPageId(notionDest)
+          : undefined,
       });
       navigate(`/projects/${project.id}/dashboard`);
     } catch (e) {
@@ -254,14 +257,17 @@ export function ProjectWizardPage() {
 
           {step === 8 && (
             <div>
-              <Label htmlFor="notion">Notion Page ID</Label>
+              <Label htmlFor="notion">Notion (optional)</Label>
               <Input
                 id="notion"
                 value={notionDest}
                 onChange={(e) => setNotionDest(e.target.value)}
-                placeholder="Notion page ID (optional)"
+                placeholder="Leave blank — create pages later in Project Integrations"
                 className="mt-2"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Or paste a parent Notion page URL if you already have one
+              </p>
             </div>
           )}
 

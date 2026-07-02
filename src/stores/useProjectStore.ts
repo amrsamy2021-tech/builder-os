@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { runWithLoading } from "@/stores/useLoadingStore";
 import { commands } from "@/lib/tauri-commands";
 import type { ProductBrain, Project } from "@/types/product-brain";
 import { createEmptyProductBrain } from "@/types/product-brain";
@@ -41,6 +42,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createProject: async (name, folderPath, idea, extras = {}) => {
+    return runWithLoading("Creating project...", async () => {
     set({ loading: true, error: null });
     try {
       const id = crypto.randomUUID();
@@ -67,6 +69,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({ error: String(e), loading: false });
       throw e;
     }
+    });
   },
 
   setActiveProject: (id) => set({ activeProjectId: id }),

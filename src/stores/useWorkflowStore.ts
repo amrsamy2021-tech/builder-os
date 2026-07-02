@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { commands } from "@/lib/tauri-commands";
 import type { WorkflowStageState, NextAction } from "@/types/workflow";
 import { computeNextAction } from "@/features/workflow/next-action-engine";
+import {
+  calculateStageCompletion,
+  isStageComplete,
+} from "@/features/workflow/workflow-sync";
 import type { ProductBrain } from "@/types/product-brain";
 import type { Deliverable } from "@/lib/tauri-commands";
 
@@ -17,6 +21,7 @@ interface WorkflowState {
     deliverables: Deliverable[],
   ) => NextAction | null;
   approveStage: (projectId: string, stageId: string) => Promise<void>;
+  syncWorkflowProgress: (projectId: string) => Promise<void>;
 }
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
@@ -27,7 +32,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   fetchStages: async (projectId) => {
     set({ loading: true });
     try {
-      const stages = await commands.getWorkflowStages(projectId);
+      let stages = await commands.getWorkflowStages(projectId);
+      if (stages.length === 0) {
+        await commands.initWorkflowStages(projectId);
+        stages = await commands.getWorkflowStages(projectId);
+      }
       set((state) => ({
         stages: { ...state.stages, [projectId]: stages },
         loading: false,
@@ -67,8 +76,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   approveStage: async (projectId, stageId) => {
     const stages = get().stages[projectId] ?? [];
-    const stage = stages.find((s) => s.id === stageId);
+    const stageIndex = stages.findIndex((s) => s.id === stageId);
+    const stage = stages[stageIndex];
     if (!stage) return;
+
     const updated: WorkflowStageState = {
       ...stage,
       status: "completed",
@@ -76,14 +87,40 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       approvedAt: new Date().toISOString(),
     };
     await get().updateStage(projectId, updated);
-    const nextStage = stages.find(
-      (s) => s.status === "not_started" && s.id !== stageId,
-    );
-    if (nextStage) {
+
+    const nextStage = stages[stageIndex + 1];
+    if (nextStage && nextStage.status === "not_started") {
       await get().updateStage(projectId, {
         ...nextStage,
         status: "in_progress",
       });
+    }
+  },
+
+  syncWorkflowProgress: async (projectId) => {
+    const { useDeliverablesStore } = await import("@/stores/useDeliverablesStore");
+    const deliverables =
+      useDeliverablesStore.getState().deliverables[projectId] ?? [];
+    const stages = get().stages[projectId] ?? [];
+    if (stages.length === 0) return;
+
+    for (const stage of stages) {
+      const pct = calculateStageCompletion(stage, deliverables);
+      if (pct !== stage.completionPercentage) {
+        await get().updateStage(projectId, {
+          ...stage,
+          completionPercentage: pct,
+        });
+      }
+    }
+
+    const refreshed = get().stages[projectId] ?? [];
+    const current =
+      refreshed.find((s) => s.status === "in_progress") ??
+      refreshed.find((s) => s.status === "not_started");
+
+    if (current && isStageComplete(current, deliverables)) {
+      await get().approveStage(projectId, current.id);
     }
   },
 }));
