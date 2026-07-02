@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,22 +9,34 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { useWorkflowStore } from "@/stores/useWorkflowStore";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
 import { useIntegrationStore } from "@/stores/useIntegrationStore";
-import { getOverallProgress, getCurrentStage } from "@/features/workflow/next-action-engine";
+import {
+  computeNextAction,
+  getOverallProgress,
+  getCurrentStage,
+} from "@/features/workflow/next-action-engine";
 import { commands } from "@/lib/tauri-commands";
 import { toast } from "sonner";
+import type { Deliverable } from "@/lib/tauri-commands";
+import type { WorkflowStageState } from "@/types/workflow";
+
+const EMPTY_STAGES: WorkflowStageState[] = [];
+const EMPTY_DELIVERABLES: Deliverable[] = [];
 
 export function DashboardPage() {
   const { id } = useParams<{ id: string }>();
   const { projects, productBrains, loadProductBrain, setActiveProject } = useProjectStore();
-  const { stages, nextActions, fetchStages, computeNextActionForProject } = useWorkflowStore();
+  const { stages, fetchStages } = useWorkflowStore();
   const { deliverables, fetchDeliverables } = useDeliverablesStore();
   const { integrations, fetchIntegrations } = useIntegrationStore();
 
   const project = projects.find((p) => p.id === id);
   const brain = id ? productBrains[id] : null;
-  const projectStages = id ? stages[id] ?? [] : [];
-  const nextAction = id ? nextActions[id] : null;
-  const projectDeliverables = id ? deliverables[id] ?? [] : [];
+  const projectStages = id ? (stages[id] ?? EMPTY_STAGES) : EMPTY_STAGES;
+  const projectDeliverables = id ? (deliverables[id] ?? EMPTY_DELIVERABLES) : EMPTY_DELIVERABLES;
+  const nextAction = useMemo(
+    () => (id && brain ? computeNextAction(projectStages, brain, projectDeliverables) : null),
+    [id, brain, projectStages, projectDeliverables],
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -34,12 +46,6 @@ export function DashboardPage() {
     fetchDeliverables(id);
     fetchIntegrations();
   }, [id, setActiveProject, loadProductBrain, fetchStages, fetchDeliverables, fetchIntegrations]);
-
-  useEffect(() => {
-    if (id && brain) {
-      computeNextActionForProject(id, brain, projectDeliverables);
-    }
-  }, [id, brain, projectDeliverables, computeNextActionForProject]);
 
   const currentStage = getCurrentStage(projectStages);
   const overallProgress = getOverallProgress(projectStages);

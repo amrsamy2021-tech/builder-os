@@ -55,6 +55,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   computeNextActionForProject: (projectId, productBrain, deliverables) => {
     const stages = get().stages[projectId] ?? [];
     const action = computeNextAction(stages, productBrain, deliverables);
+    const current = get().nextActions[projectId];
+    if (current?.id === action?.id && current?.title === action?.title) {
+      return action;
+    }
     set((state) => ({
       nextActions: { ...state.nextActions, [projectId]: action },
     }));

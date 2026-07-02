@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +6,12 @@ import { Progress } from "@/components/ui/progress";
 import { useWorkflowStore } from "@/stores/useWorkflowStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
-import { getCurrentStage } from "@/features/workflow/next-action-engine";
-import type { StageStatus } from "@/types/workflow";
+import { computeNextAction, getCurrentStage } from "@/features/workflow/next-action-engine";
+import type { Deliverable } from "@/lib/tauri-commands";
+import type { StageStatus, WorkflowStageState } from "@/types/workflow";
+
+const EMPTY_STAGES: WorkflowStageState[] = [];
+const EMPTY_DELIVERABLES: Deliverable[] = [];
 
 const STATUS_VARIANT: Record<StageStatus, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   not_started: "outline",
@@ -20,13 +24,17 @@ const STATUS_VARIANT: Record<StageStatus, "default" | "secondary" | "destructive
 
 export function WorkflowPage() {
   const { id } = useParams<{ id: string }>();
-  const { stages, nextActions, fetchStages, computeNextActionForProject } = useWorkflowStore();
+  const { stages, fetchStages } = useWorkflowStore();
   const { productBrains, loadProductBrain } = useProjectStore();
   const { deliverables, fetchDeliverables } = useDeliverablesStore();
 
-  const projectStages = id ? stages[id] ?? [] : [];
+  const projectStages = id ? (stages[id] ?? EMPTY_STAGES) : EMPTY_STAGES;
   const brain = id ? productBrains[id] : null;
-  const nextAction = id ? nextActions[id] : null;
+  const projectDeliverables = id ? (deliverables[id] ?? EMPTY_DELIVERABLES) : EMPTY_DELIVERABLES;
+  const nextAction = useMemo(
+    () => (id && brain ? computeNextAction(projectStages, brain, projectDeliverables) : null),
+    [id, brain, projectStages, projectDeliverables],
+  );
   const current = getCurrentStage(projectStages);
 
   useEffect(() => {
@@ -35,12 +43,6 @@ export function WorkflowPage() {
     loadProductBrain(id);
     fetchDeliverables(id);
   }, [id, fetchStages, loadProductBrain, fetchDeliverables]);
-
-  useEffect(() => {
-    if (id && brain) {
-      computeNextActionForProject(id, brain, deliverables[id] ?? []);
-    }
-  }, [id, brain, deliverables, computeNextActionForProject]);
 
   return (
     <div className="p-8">
