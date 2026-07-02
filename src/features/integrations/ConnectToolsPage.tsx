@@ -11,6 +11,8 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { TOOL_CARDS, MCP_CAPABLE_TOOLS } from "@/types/integrations";
 import { NotionSyncSetup } from "@/features/integrations/NotionSyncSetup";
 import { runWithLoading } from "@/stores/useLoadingStore";
+import { commands } from "@/lib/tauri-commands";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export function ConnectToolsPage() {
@@ -36,6 +38,8 @@ export function ConnectToolsPage() {
   const [savingNotionSync, setSavingNotionSync] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [connectionMode, setConnectionMode] = useState<Record<string, "mcp" | "api_key">>({});
+  const [cursorCliDetected, setCursorCliDetected] = useState<boolean | null>(null);
+  const [cursorKeyStored, setCursorKeyStored] = useState<boolean | null>(null);
 
   const activeProject = getActiveProject();
 
@@ -43,6 +47,8 @@ export function ConnectToolsPage() {
     fetchIntegrations();
     fetchMcpServers();
     checkNotionSyncReady();
+    commands.detectCursorCli().then(setCursorCliDetected).catch(() => setCursorCliDetected(false));
+    commands.hasSecret("builder-os-cursor-api").then(setCursorKeyStored).catch(() => setCursorKeyStored(false));
   }, [fetchIntegrations, fetchMcpServers, checkNotionSyncReady]);
 
   const getStatus = (tool: string) =>
@@ -316,7 +322,7 @@ export function ConnectToolsPage() {
                   </>
                 )}
 
-                {!isConnected && isLocal && (
+                {!isConnected && isLocal && tool.tool !== "cursor" && (
                   <Button
                     size="sm"
                     onClick={() => connect(tool.tool, { connected: "true" })}
@@ -326,7 +332,78 @@ export function ConnectToolsPage() {
                   </Button>
                 )}
 
-                {isConnected && (
+                {!isConnected && tool.tool === "cursor" && (
+                  <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
+                    <p>
+                      CLI:{" "}
+                      <Badge variant={cursorCliDetected ? "success" : "outline"}>
+                        {cursorCliDetected ? "Detected" : "Not found"}
+                      </Badge>
+                    </p>
+                    <p>
+                      API key:{" "}
+                      <Badge variant={cursorKeyStored ? "success" : "outline"}>
+                        {cursorKeyStored ? "Saved" : "Missing"}
+                      </Badge>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Save your Cursor API key in Settings for background Generate and Send to Dev.
+                    </p>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/settings">Open Settings</Link>
+                    </Button>
+                  </div>
+                )}
+
+                {isConnected && tool.tool === "cursor" && (
+                  <div className="space-y-2">
+                    <div className="space-y-1 text-sm">
+                      <p>
+                        CLI:{" "}
+                        <Badge variant={cursorCliDetected ? "success" : "outline"}>
+                          {cursorCliDetected ? "Detected" : "Not found"}
+                        </Badge>
+                      </p>
+                      <p>
+                        API key:{" "}
+                        <Badge variant={cursorKeyStored ? "success" : "outline"}>
+                          {cursorKeyStored ? "Saved" : "Missing"}
+                        </Badge>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/settings">Settings</Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          setTesting("cursor");
+                          try {
+                            const result = await commands.testCursorAgent();
+                            toast.success(result);
+                          } catch (e) {
+                            toast.error(String(e));
+                          } finally {
+                            setTesting(null);
+                          }
+                        }}
+                        disabled={testing === "cursor"}
+                      >
+                        {testing === "cursor" ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : null}
+                        Test agent
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => disconnect(tool.tool)}>
+                        Disconnect
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {isConnected && tool.tool !== "cursor" && (
                   <div className="space-y-2">
                     {integrations.find((i) => i.tool === tool.tool)?.config?.mode === "mcp" && (
                       <Badge variant="secondary" className="gap-1">

@@ -43,6 +43,7 @@ pub fn run() {
             commands::cursor::detect_cursor_cli,
             commands::cursor::test_cursor_agent,
             commands::cursor::run_cursor_agent,
+            commands::cursor::cancel_cursor_agent,
             commands::openai::save_secret,
             commands::openai::get_secret,
             commands::openai::delete_secret,

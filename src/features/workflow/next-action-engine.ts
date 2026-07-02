@@ -132,6 +132,44 @@ export function computeNextAction(
 
   if (!currentStage) return null;
 
+  const hasScreenDeliverables =
+    isDeliverableDone(deliverables, "Screen List") ||
+    isDeliverableDone(deliverables, "Screen Specs");
+
+  if (
+    hasScreenDeliverables &&
+    productBrain.screens.length === 0 &&
+    (currentStage.id === "ux" || currentStage.id === "ui" || currentStage.id === "development")
+  ) {
+    return {
+      id: "import-screens",
+      title: "Import screens to Screen Hub",
+      description:
+        "Screen List or Screen Specs is ready — import into Screens for Notion, Figma, and QA links",
+      type: "import_screens",
+      requiresApproval: false,
+    };
+  }
+
+  const nextDevScreen = productBrain.screens.find(
+    (s) => !s.devStatus || s.devStatus === "not_started",
+  );
+  if (
+    nextDevScreen &&
+    (currentStage.id === "development" || currentStage.id === "ui") &&
+    isDeliverableDone(deliverables, "Screen Specs")
+  ) {
+    return {
+      id: `send-to-dev-${nextDevScreen.id}`,
+      title: `Send ${nextDevScreen.name} to dev`,
+      description: "Run Cursor in the background to implement this screen",
+      type: "send_to_dev",
+      targetTool: "cursor",
+      requiresApproval: false,
+      screenId: nextDevScreen.id,
+    };
+  }
+
   for (const input of currentStage.requiredInputs) {
     if (!hasInput(productBrain, deliverables, input)) {
       return {

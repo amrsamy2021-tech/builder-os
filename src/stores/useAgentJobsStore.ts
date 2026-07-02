@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { commands } from "@/lib/tauri-commands";
-import { runWithLoading } from "@/stores/useLoadingStore";
 
 export type AgentJobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 export type AgentJobMode = "local" | "cloud";
+export type AgentProvider = "cursor" | "openai" | "cursor_with_openai_fallback";
 
 export interface AgentJob {
   id: string;
@@ -16,6 +16,7 @@ export interface AgentJob {
   mode: AgentJobMode;
   status: AgentJobStatus;
   output?: string;
+  liveOutput?: string;
   error?: string;
   startedAt: string;
   finishedAt?: string;
@@ -33,6 +34,9 @@ interface AgentJobsState {
     screenId?: string;
     deliverableType?: string;
   }) => Promise<AgentJob>;
+  appendJobOutput: (jobId: string, line: string) => void;
+  markJobStreamDone: (jobId: string) => void;
+  cancelJob: (jobId: string) => Promise<void>;
   getProjectJobs: (projectId: string) => AgentJob[];
   clearFinished: () => void;
 }
@@ -52,6 +56,7 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
       prompt: input.prompt,
       mode: input.mode ?? "local",
       status: "queued",
+      liveOutput: "",
       startedAt: new Date().toISOString(),
     };
 
@@ -67,19 +72,24 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
     }));
 
     try {
-      const output = await runWithLoading(`Running: ${input.label}`, async () =>
-        commands.runCursorAgent({
-          folderPath: input.folderPath,
-          prompt: input.prompt,
-          mode: input.mode ?? "local",
-        }),
-      );
+      const output = await commands.runCursorAgent({
+        jobId: job.id,
+        folderPath: input.folderPath,
+        prompt: input.prompt,
+        mode: input.mode ?? "local",
+      });
 
       const finishedAt = new Date().toISOString();
       set((state) => ({
         jobs: state.jobs.map((j) =>
           j.id === job.id
-            ? { ...j, status: "done" as const, output, finishedAt }
+            ? {
+                ...j,
+                status: "done" as const,
+                output,
+                liveOutput: j.liveOutput || output,
+                finishedAt,
+              }
             : j,
         ),
         activeJobId: state.activeJobId === job.id ? null : state.activeJobId,
@@ -94,6 +104,10 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
     } catch (e) {
       const error = String(e);
       const finishedAt = new Date().toISOString();
+      const current = get().jobs.find((j) => j.id === job.id);
+      if (current?.status === "cancelled") {
+        return { ...current, finishedAt };
+      }
       set((state) => ({
         jobs: state.jobs.map((j) =>
           j.id === job.id
@@ -106,6 +120,43 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
     }
   },
 
+  appendJobOutput: (jobId, line) => {
+    set((state) => ({
+      jobs: state.jobs.map((j) =>
+        j.id === jobId
+          ? { ...j, liveOutput: `${j.liveOutput ?? ""}${line}\n` }
+          : j,
+      ),
+    }));
+  },
+
+  markJobStreamDone: (jobId) => {
+    set((state) => ({
+      jobs: state.jobs.map((j) =>
+        j.id === jobId && j.status === "running"
+          ? { ...j, output: j.liveOutput ?? j.output }
+          : j,
+      ),
+    }));
+  },
+
+  cancelJob: async (jobId) => {
+    try {
+      await commands.cancelCursorAgent(jobId);
+    } catch {
+      // Job may have already finished
+    }
+    const finishedAt = new Date().toISOString();
+    set((state) => ({
+      jobs: state.jobs.map((j) =>
+        j.id === jobId
+          ? { ...j, status: "cancelled" as const, error: "Cancelled by user", finishedAt }
+          : j,
+      ),
+      activeJobId: state.activeJobId === jobId ? null : state.activeJobId,
+    }));
+  },
+
   getProjectJobs: (projectId) => get().jobs.filter((j) => j.projectId === projectId),
 
   clearFinished: () =>
@@ -113,8 +164,6 @@ export const useAgentJobsStore = create<AgentJobsState>((set, get) => ({
       jobs: state.jobs.filter((j) => j.status === "queued" || j.status === "running"),
     })),
 }));
-
-export type AgentProvider = "cursor" | "openai" | "cursor_with_openai_fallback";
 
 export async function getAgentProvider(): Promise<AgentProvider> {
   const integrations = await commands.getIntegrations();
@@ -141,4 +190,12 @@ export async function isCursorReady(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function isAnyAgentReady(): Promise<boolean> {
+  const [cursorReady, hasOpenAI] = await Promise.all([
+    isCursorReady(),
+    commands.hasSecret("builder-os-openai"),
+  ]);
+  return cursorReady || hasOpenAI;
 }

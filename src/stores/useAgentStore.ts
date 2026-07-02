@@ -29,17 +29,29 @@ async function generateWithCursor(
   deliverableType: string,
   taskLabel: string,
   folderPath: string,
+  onStream?: (text: string) => void,
 ): Promise<string> {
   const prompt = buildAgentPrompt(agentType, productBrain, deliverableType);
-  const job = await useAgentJobsStore.getState().enqueueJob({
-    projectId: productBrain.id,
-    folderPath,
-    label: taskLabel,
-    prompt,
-    deliverableType,
-    mode: productBrain.preferredAgentMode === "cloud" ? "cloud" : "local",
+  const unsub = useAgentJobsStore.subscribe((state) => {
+    const running = state.jobs.find(
+      (j) => j.status === "running" && j.label === taskLabel && j.projectId === productBrain.id,
+    );
+    if (running?.liveOutput && onStream) onStream(running.liveOutput);
   });
-  return job.output ?? "";
+
+  try {
+    const job = await useAgentJobsStore.getState().enqueueJob({
+      projectId: productBrain.id,
+      folderPath,
+      label: taskLabel,
+      prompt,
+      deliverableType,
+      mode: productBrain.preferredAgentMode === "cloud" ? "cloud" : "local",
+    });
+    return job.output ?? job.liveOutput ?? "";
+  } finally {
+    unsub();
+  }
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
@@ -77,6 +89,7 @@ export const useAgentStore = create<AgentState>((set) => ({
               deliverableType,
               label,
               folderPath,
+              (text) => set({ streamingContent: text }),
             );
           } catch (cursorError) {
             if (provider !== "cursor_with_openai_fallback") throw cursorError;

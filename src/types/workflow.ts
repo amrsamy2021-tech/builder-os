@@ -13,7 +13,9 @@ export type NextActionType =
   | "sync_tool"
   | "user_input"
   | "run_command"
-  | "review";
+  | "review"
+  | "import_screens"
+  | "send_to_dev";
 
 export type TargetTool =
   | "openai"
@@ -32,6 +34,7 @@ export interface NextAction {
   targetTool?: TargetTool;
   requiresApproval: boolean;
   deliverableType?: string;
+  screenId?: string;
 }
 
 export interface WorkflowStageState {

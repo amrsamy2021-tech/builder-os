@@ -9,7 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDeliverablesStore } from "@/stores/useDeliverablesStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useScreensStore } from "@/stores/useScreensStore";
+import { isAnyAgentReady } from "@/stores/useAgentJobsStore";
 import { useIntegrationStore } from "@/stores/useIntegrationStore";
+import { Link } from "react-router-dom";
 import { ApprovalGate } from "@/features/workflow/ApprovalGate";
 import { DeliverableEditorDialog } from "@/features/deliverables/DeliverableEditorDialog";
 import {
@@ -34,7 +37,9 @@ export function DeliverablesPage() {
   const { fetchIntegrations, notionSyncReady, checkNotionSyncReady } =
     useIntegrationStore();
   const { generating, streamingContent, generate } = useAgentStore();
+  const { importFromDeliverables } = useScreensStore();
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [agentReady, setAgentReady] = useState<boolean | null>(null);
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -78,11 +83,25 @@ export function DeliverablesPage() {
         version: existing ? existing.version + 1 : 1,
       });
       openEditor(saved);
-      toast.success(`Generated ${DELIVERABLE_LABELS[type]}`);
+      if (["screen_list", "screen_specs", "qa_test_cases"].includes(type)) {
+        await fetchDeliverables(id);
+        const all = useDeliverablesStore.getState().deliverables[id] ?? [];
+        const importResult = await importFromDeliverables(id, brain, all);
+        useProjectStore.setState((s) => ({
+          productBrains: { ...s.productBrains, [id]: importResult.brain },
+        }));
+        toast.success(`Imported to Screens: ${importResult.screensAdded} screens, ${importResult.qaCasesAdded} tests`);
+      } else {
+        toast.success(`Generated ${DELIVERABLE_LABELS[type]}`);
+      }
     } catch (e) {
       toast.error(String(e));
     }
-  }, [id, brain, generate, getByType, saveDeliverable, project?.folderPath]);
+  }, [id, brain, generate, getByType, saveDeliverable, project?.folderPath, fetchDeliverables, importFromDeliverables]);
+
+  useEffect(() => {
+    isAnyAgentReady().then(setAgentReady).catch(() => setAgentReady(false));
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -135,9 +154,21 @@ export function DeliverablesPage() {
   return (
     <div className="p-8">
       <h1 className="mb-2 text-3xl font-bold">Deliverables</h1>
-      <p className="mb-8 text-muted-foreground">
+      <p className="mb-4 text-muted-foreground">
         Generate, view, edit, approve, and sync product artifacts to Notion
       </p>
+
+      {agentReady === false && (
+        <Card className="mb-8 border-destructive/40 bg-destructive/5">
+          <CardContent className="py-4 text-sm">
+            No AI agent configured. Add a{" "}
+            <Link to="/settings" className="font-medium underline">
+              Cursor API key
+            </Link>{" "}
+            (recommended) or OpenAI key in Settings to generate deliverables.
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="all">
         <TabsList>

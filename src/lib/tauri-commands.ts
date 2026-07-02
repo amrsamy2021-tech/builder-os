@@ -138,17 +138,21 @@ export const commands = {
   detectCursorCli: () => invoke<boolean>("detect_cursor_cli"),
   testCursorAgent: () => invoke<string>("test_cursor_agent"),
   runCursorAgent: (input: {
+    jobId: string;
     folderPath: string;
     prompt: string;
     mode?: string;
   }) =>
     invoke<string>("run_cursor_agent", {
       input: {
+        job_id: input.jobId,
         folder_path: input.folderPath,
         prompt: input.prompt,
         mode: input.mode,
       },
     }),
+  cancelCursorAgent: (jobId: string) =>
+    invoke<void>("cancel_cursor_agent", { job_id: jobId }),
   openInCursor: (folderPath: string) =>
     invoke<void>("open_in_cursor", { folderPath }),
   writeCursorFiles: (folderPath: string, productBrain: ProductBrain) =>
