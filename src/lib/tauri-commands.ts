@@ -171,4 +171,8 @@ export const commands = {
     }),
   testMcpConnection: (mcpServerName: string) =>
     invoke<string>("test_mcp_connection", { mcpServerName }),
+
+  // Shell
+  runShellCommand: (command: string, cwd?: string) =>
+    invoke<string>("run_shell_command", { command, cwd }),
 };
